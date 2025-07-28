@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAM Analyser Tool - Computer Vision Dataset Explorer</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-microscope"></i> SAM Analyser Tool</h1>
+                <p>Computer Vision Dataset Analysis and Visualization</p>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="section">
+                    <h3><i class="fas fa-folder-open"></i> Projects</h3>
+                    <div class="project-controls">
+                        <div class="current-project">
+                            <select id="projectSelect">
+                                <option value="default">Default Project</option>
+                            </select>
+                            <button id="newProjectBtn" class="btn btn-sm" title="New Project">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div class="project-folders" id="projectFolders">
+                            <div class="folder-item active" data-folder="all">
+                                <i class="fas fa-images"></i>
+                                <span>All Images</span>
+                                <span class="folder-count" id="allImagesCount">0</span>
+                            </div>
+                            <div class="folder-item" data-folder="unsorted">
+                                <i class="fas fa-question-circle"></i>
+                                <span>Unsorted</span>
+                                <span class="folder-count" id="unsortedCount">0</span>
+                            </div>
+                        </div>
+                        <button id="newFolderBtn" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-folder-plus"></i> New Folder
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3><i class="fas fa-upload"></i> Dataset</h3>
+                    <div class="upload-area" id="uploadArea">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Drag & drop images here or click to select</p>
+                        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+                    </div>
+                    
+                    <div class="annotation-upload-section">
+                        <h4><i class="fas fa-tags"></i> Import Annotations</h4>
+                        <div class="annotation-format-selector">
+                            <select id="annotationFormat">
+                                <option value="coco">COCO JSON</option>
+                                <option value="yolo">YOLO TXT</option>
+                                <option value="csv">CSV Format</option>
+                                <option value="pascal">Pascal VOC XML</option>
+                            </select>
+                        </div>
+                        <div class="annotation-upload-area" id="annotationUploadArea">
+                            <i class="fas fa-file-code"></i>
+                            <p>Upload annotation files</p>
+                            <input type="file" id="annotationInput" multiple style="display: none;">
+                        </div>
+                        <div class="annotation-help">
+                            <small id="formatHelp">Select COCO JSON file or multiple YOLO txt files</small>
+                            <button id="troubleshootBtn" class="btn btn-sm" style="margin-top: 8px; background: #37474f;">
+                                <i class="fas fa-question-circle"></i> Troubleshooting
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="dataset-info" id="datasetInfo" style="display: none;">
+                        <p><strong>Total Images:</strong> <span id="totalImages">0</span></p>
+                        <p><strong>Dataset Size:</strong> <span id="datasetSize">0 MB</span></p>
+                        <p><strong>Annotations:</strong> <span id="totalAnnotations">0</span></p>
+                        <p><strong>Classes:</strong> <span id="totalClasses">0</span></p>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3><i class="fas fa-filter"></i> Filters</h3>
+                    <div class="filter-group">
+                        <label>Search:</label>
+                        <input type="text" id="searchInput" placeholder="Filter by filename...">
+                    </div>
+                    <div class="filter-group">
+                        <label>Format:</label>
+                        <select id="formatFilter">
+                            <option value="">All formats</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Size Range:</label>
+                        <input type="range" id="sizeFilter" min="0" max="100" value="100">
+                        <span id="sizeValue">All sizes</span>
+                    </div>
+                    <div class="filter-group">
+                        <label>Annotation Class:</label>
+                        <select id="classFilter">
+                            <option value="">All classes</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>
+                            <input type="checkbox" id="annotatedOnly"> Only annotated images
+                        </label>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3><i class="fas fa-tags"></i> Annotations</h3>
+                    <button id="annotationMode" class="btn btn-secondary">
+                        <i class="fas fa-square-plus"></i> Add Bounding Box
+                    </button>
+                    <div id="annotationList" class="annotation-list"></div>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="gallery">
+                        <i class="fas fa-th"></i> Gallery
+                    </button>
+                    <button class="tab-btn" data-tab="statistics">
+                        <i class="fas fa-chart-bar"></i> Statistics
+                    </button>
+                    <button class="tab-btn" data-tab="embeddings">
+                        <i class="fas fa-project-diagram"></i> Embeddings
+                    </button>
+                </div>
+
+                <div class="tab-content">
+                    <div id="gallery" class="tab-pane active">
+                        <div class="gallery-controls">
+                            <div class="view-controls">
+                                <button id="gridView" class="btn btn-sm active">
+                                    <i class="fas fa-th"></i>
+                                </button>
+                                <button id="listView" class="btn btn-sm">
+                                    <i class="fas fa-list"></i>
+                                </button>
+                                <button id="selectModeBtn" class="btn btn-sm">
+                                    <i class="fas fa-check-square"></i> Select
+                                </button>
+                                <button id="annotationVisibilityToggle" class="btn btn-sm" title="Toggle annotation visibility">
+                                    <i class="fas fa-eye"></i> Annotations
+                                </button>
+                            </div>
+                            <div class="bulk-actions" id="bulkActions" style="display: none;">
+                                <button id="moveSelectedBtn" class="btn btn-sm">
+                                    <i class="fas fa-folder"></i> Move to Folder
+                                </button>
+                                <button id="deleteSelectedBtn" class="btn btn-sm" style="background: #f44336;">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                                <span id="selectedCount">0 selected</span>
+                            </div>
+                            <div class="pagination-info">
+                                <span id="resultsInfo">0 images</span>
+                            </div>
+                        </div>
+                        <div id="imageGrid" class="image-grid"></div>
+                        <div class="pagination" id="pagination"></div>
+                    </div>
+
+                    <div id="statistics" class="tab-pane">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <h4>Format Distribution</h4>
+                                <div id="formatChart"></div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Image Dimensions</h4>
+                                <div id="dimensionsChart"></div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>File Size Distribution</h4>
+                                <div id="sizeChart"></div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Color Analysis</h4>
+                                <div id="colorChart"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="embeddings" class="tab-pane">
+                        <div class="embeddings-container">
+                            <div class="embeddings-info">
+                                <h4>Image Embeddings Visualization</h4>
+                                <p>This would show t-SNE or UMAP visualization of image embeddings to reveal hidden patterns and clusters in your dataset.</p>
+                            </div>
+                            <div id="embeddingsPlot" style="height: 500px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image Modal -->
+        <div id="imageModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Image Details</h3>
+                    <div class="modal-controls">
+                        <button id="annotationToggle" class="btn btn-sm" style="margin-right: 10px;">
+                            <i class="fas fa-eye"></i> Hide Annotations
+                        </button>
+                        <span class="close">&times;</span>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div class="image-container">
+                        <canvas id="annotationCanvas"></canvas>
+                        <img id="modalImage" alt="">
+                    </div>
+                    <div class="image-metadata">
+                        <h4>Metadata</h4>
+                        <div id="metadataContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

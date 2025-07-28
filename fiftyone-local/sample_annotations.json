@@ -1,0 +1,103 @@
+{
+    "info": {
+        "description": "Sample COCO Dataset for FiftyOne Local",
+        "version": "1.0",
+        "year": 2025,
+        "contributor": "FiftyOne Local Demo",
+        "date_created": "2025-01-01"
+    },
+    "categories": [
+        {
+            "id": 1,
+            "name": "person",
+            "supercategory": "person"
+        },
+        {
+            "id": 2,
+            "name": "car",
+            "supercategory": "vehicle"
+        },
+        {
+            "id": 3,
+            "name": "dog",
+            "supercategory": "animal"
+        },
+        {
+            "id": 4,
+            "name": "cat",
+            "supercategory": "animal"
+        },
+        {
+            "id": 5,
+            "name": "bicycle",
+            "supercategory": "vehicle"
+        }
+    ],
+    "images": [
+        {
+            "id": 1,
+            "width": 640,
+            "height": 480,
+            "file_name": "image_001.jpg"
+        },
+        {
+            "id": 2,
+            "width": 800,
+            "height": 600,
+            "file_name": "image_002.jpg"
+        },
+        {
+            "id": 3,
+            "width": 1024,
+            "height": 768,
+            "file_name": "image_003.jpg"
+        }
+    ],
+    "annotations": [
+        {
+            "id": 1,
+            "image_id": 1,
+            "category_id": 1,
+            "bbox": [100, 50, 120, 200],
+            "area": 24000,
+            "iscrowd": 0,
+            "score": 0.95
+        },
+        {
+            "id": 2,
+            "image_id": 1,
+            "category_id": 2,
+            "bbox": [300, 200, 180, 100],
+            "area": 18000,
+            "iscrowd": 0,
+            "score": 0.88
+        },
+        {
+            "id": 3,
+            "image_id": 2,
+            "category_id": 3,
+            "bbox": [150, 100, 80, 90],
+            "area": 7200,
+            "iscrowd": 0,
+            "score": 0.92
+        },
+        {
+            "id": 4,
+            "image_id": 2,
+            "category_id": 1,
+            "bbox": [400, 80, 100, 180],
+            "area": 18000,
+            "iscrowd": 0,
+            "score": 0.89
+        },
+        {
+            "id": 5,
+            "image_id": 3,
+            "category_id": 5,
+            "bbox": [200, 300, 150, 120],
+            "area": 18000,
+            "iscrowd": 0,
+            "score": 0.91
+        }
+    ]
+}

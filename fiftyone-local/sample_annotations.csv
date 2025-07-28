@@ -1,0 +1,9 @@
+filename,class,x,y,width,height,confidence
+image_001.jpg,person,100,50,120,200,0.95
+image_001.jpg,car,300,200,180,100,0.88
+image_002.jpg,dog,150,100,80,90,0.92
+image_002.jpg,person,400,80,100,180,0.89
+image_003.jpg,bicycle,200,300,150,120,0.91
+image_003.jpg,person,50,120,90,160,0.87
+image_004.jpg,cat,180,200,70,80,0.93
+image_004.jpg,car,350,150,200,120,0.85
