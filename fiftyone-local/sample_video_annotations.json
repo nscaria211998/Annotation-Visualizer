@@ -1,0 +1,68 @@
+{
+  "info": {
+    "description": "Sample Video Timeline Dataset for SAM Analyser Tool",
+    "version": "1.0",
+    "year": 2025,
+    "contributor": "SAM Analyser Demo",
+    "date_created": "2025-08-06"
+  },
+  "videos": [
+    {
+      "filename": "sample_video.mp4",
+      "duration": 120.0,
+      "segments": [
+        {
+          "id": "segment_1",
+          "label": "Introduction",
+          "start_time": 0.0,
+          "end_time": 15.5,
+          "confidence": 0.95,
+          "description": "Opening sequence of the video"
+        },
+        {
+          "id": "segment_2", 
+          "label": "Main Content",
+          "start_time": 15.5,
+          "end_time": 95.2,
+          "confidence": 0.88,
+          "description": "Primary content section"
+        },
+        {
+          "id": "segment_3",
+          "label": "Conclusion",
+          "start_time": 95.2,
+          "end_time": 120.0,
+          "confidence": 0.92,
+          "description": "Closing remarks and summary"
+        }
+      ]
+    },
+    {
+      "filename": "demo_video_annotated.webm",
+      "duration": 60.0,
+      "segments": [
+        {
+          "id": "action_1",
+          "label": "Action Scene",
+          "start_time": 5.0,
+          "end_time": 25.0,
+          "confidence": 0.93
+        },
+        {
+          "id": "dialogue_1",
+          "label": "Dialogue",
+          "start_time": 30.0,
+          "end_time": 50.0,
+          "confidence": 0.89
+        },
+        {
+          "id": "transition_1",
+          "label": "Scene Transition", 
+          "start_time": 50.0,
+          "end_time": 60.0,
+          "confidence": 0.85
+        }
+      ]
+    }
+  ]
+}

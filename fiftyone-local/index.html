@@ -52,8 +52,8 @@
                     <h3><i class="fas fa-upload"></i> Dataset</h3>
                     <div class="upload-area" id="uploadArea">
                         <i class="fas fa-cloud-upload-alt"></i>
-                        <p>Drag & drop images here or click to select</p>
-                        <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+                        <p>Drag & drop images/videos here or click to select</p>
+                        <input type="file" id="fileInput" multiple accept="image/*,video/*" style="display: none;">
                     </div>
                     
                     <div class="annotation-upload-section">
@@ -64,6 +64,7 @@
                                 <option value="yolo">YOLO TXT</option>
                                 <option value="csv">CSV Format</option>
                                 <option value="pascal">Pascal VOC XML</option>
+                                <option value="video_timeline">Video Timeline JSON</option>
                             </select>
                         </div>
                         <div class="annotation-upload-area" id="annotationUploadArea">
@@ -213,6 +214,9 @@
                 <div class="modal-header">
                     <h3 id="modalTitle">Image Details</h3>
                     <div class="modal-controls">
+                        <select id="modalClassFilter" class="form-control" style="margin-right: 10px; background: #2a3441; border: 1px solid #424850; color: #e1e5e9; border-radius: 4px; padding: 5px 10px;">
+                            <option value="">All Classes</option>
+                        </select>
                         <button id="annotationToggle" class="btn btn-sm" style="margin-right: 10px;">
                             <i class="fas fa-eye"></i> Hide Annotations
                         </button>
@@ -222,7 +226,15 @@
                 <div class="modal-body">
                     <div class="image-container">
                         <canvas id="annotationCanvas"></canvas>
-                        <img id="modalImage" alt="">
+                        <img id="modalImage" alt="" style="display: none;">
+                        <video id="modalVideo" controls style="display: none; width: 100%; height: auto;">
+                            Your browser does not support the video tag.
+                        </video>
+                        <div id="videoTimeline" class="video-timeline" style="display: none;">
+                            <div class="timeline-track">
+                                <div id="timelineAnnotations" class="timeline-annotations"></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="image-metadata">
                         <h4>Metadata</h4>

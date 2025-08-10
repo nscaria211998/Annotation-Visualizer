@@ -106,6 +106,8 @@ class SAMAnalyser {
         });
         
         // Modal annotation toggle will be set up when modal opens
+        
+        // Modal class filter will be set up when modal opens
     }
 
     handleDragOver(e) {
@@ -116,7 +118,9 @@ class SAMAnalyser {
     handleDrop(e) {
         e.preventDefault();
         e.currentTarget.style.borderColor = '#4285f4';
-        const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+        const files = Array.from(e.dataTransfer.files).filter(file => 
+            file.type.startsWith('image/') || file.type.startsWith('video/')
+        );
         this.processFiles(files);
     }
 
@@ -127,22 +131,30 @@ class SAMAnalyser {
 
     async processFiles(files) {
         const uploadArea = document.getElementById('uploadArea');
-        uploadArea.innerHTML = '<i class="fas fa-spinner fa-spin"></i><p>Processing images...</p>';
+        uploadArea.innerHTML = '<i class="fas fa-spinner fa-spin"></i><p>Processing files...</p>';
         
         for (const file of files) {
             try {
-                const imageData = await this.processImage(file);
-                imageData.folder = 'unsorted'; // Assign to unsorted folder by default
-                imageData.project = this.currentProject;
-                this.images.push(imageData);
+                let fileData;
+                if (file.type.startsWith('image/')) {
+                    fileData = await this.processImage(file);
+                } else if (file.type.startsWith('video/')) {
+                    fileData = await this.processVideo(file);
+                } else {
+                    continue; // Skip unsupported files
+                }
+                
+                fileData.folder = 'unsorted'; // Assign to unsorted folder by default
+                fileData.project = this.currentProject;
+                this.images.push(fileData);
                 
                 // Add to project's unsorted folder
                 if (!this.projects[this.currentProject].folders.unsorted.images) {
                     this.projects[this.currentProject].folders.unsorted.images = [];
                 }
-                this.projects[this.currentProject].folders.unsorted.images.push(imageData.id);
+                this.projects[this.currentProject].folders.unsorted.images.push(fileData.id);
             } catch (error) {
-                console.error('Error processing image:', file.name, error);
+                console.error('Error processing file:', file.name, error);
             }
         }
         
@@ -154,8 +166,8 @@ class SAMAnalyser {
         
         uploadArea.innerHTML = `
             <i class="fas fa-check-circle" style="color: #4caf50;"></i>
-            <p>Images loaded successfully!</p>
-            <p>Click to add more images</p>
+            <p>Files loaded successfully!</p>
+            <p>Click to add more images/videos</p>
         `;
     }
 
@@ -190,6 +202,44 @@ class SAMAnalyser {
                 };
                 img.onerror = reject;
                 img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async processVideo(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const video = document.createElement('video');
+                video.onloadedmetadata = () => {
+                    // Extract basic metadata
+                    const videoData = {
+                        id: Date.now() + Math.random(),
+                        file: file,
+                        src: e.target.result,
+                        filename: file.name,
+                        size: file.size,
+                        width: video.videoWidth,
+                        height: video.videoHeight,
+                        format: file.type.split('/')[1].toLowerCase(),
+                        lastModified: new Date(file.lastModified),
+                        aspectRatio: video.videoWidth / video.videoHeight,
+                        duration: video.duration,
+                        type: 'video',
+                        annotations: [],
+                        timelineAnnotations: [] // For timestamp-based annotations
+                    };
+                    
+                    // Try to detect existing annotations in filename
+                    this.detectExistingVideoAnnotations(videoData);
+                    
+                    resolve(videoData);
+                };
+                video.onerror = reject;
+                video.src = e.target.result;
+                video.load();
             };
             reader.onerror = reject;
             reader.readAsDataURL(file);
@@ -255,6 +305,10 @@ class SAMAnalyser {
                 helpText.textContent = 'Select Pascal VOC XML files';
                 annotationInput.accept = '.xml';
                 break;
+            case 'video_timeline':
+                helpText.textContent = 'Select Video Timeline JSON file';
+                annotationInput.accept = '.json';
+                break;
         }
     }
 
@@ -285,6 +339,9 @@ class SAMAnalyser {
                     break;
                 case 'pascal':
                     processedCount = await this.parsePascalAnnotations(files);
+                    break;
+                case 'video_timeline':
+                    processedCount = await this.parseVideoTimelineAnnotations(files[0]);
                     break;
             }
 
@@ -345,6 +402,15 @@ class SAMAnalyser {
                 const hasXmlFiles = files.some(f => f.name.toLowerCase().endsWith('.xml'));
                 if (!hasXmlFiles) {
                     return { valid: false, message: 'Pascal VOC format requires XML files (.xml)' };
+                }
+                break;
+            
+            case 'video_timeline':
+                if (files.length !== 1) {
+                    return { valid: false, message: 'Video Timeline format requires exactly one JSON file' };
+                }
+                if (!files[0].name.toLowerCase().endsWith('.json')) {
+                    return { valid: false, message: 'Video Timeline file must be a JSON file (.json)' };
                 }
                 break;
         }
@@ -850,6 +916,69 @@ image1.jpg,car,200,100,120,80</pre>
         }
     }
 
+    async parseVideoTimelineAnnotations(file) {
+        try {
+            const text = await file.text();
+            const timelineData = JSON.parse(text);
+            let annotationCount = 0;
+            
+            // Validate timeline data structure
+            if (!timelineData || typeof timelineData !== 'object') {
+                throw new Error('Invalid Video Timeline file: Root object not found');
+            }
+            
+            if (!timelineData.videos || !Array.isArray(timelineData.videos)) {
+                throw new Error('Invalid Video Timeline format: "videos" array not found');
+            }
+            
+            // Process each video's annotations
+            timelineData.videos.forEach(videoData => {
+                const video = this.images.find(v => 
+                    v.filename === videoData.filename || 
+                    v.filename.endsWith(videoData.filename) ||
+                    videoData.filename.endsWith(v.filename)
+                );
+                
+                if (!video) {
+                    console.warn(`No matching video found for ${videoData.filename}`);
+                    return;
+                }
+                
+                if (!video.timelineAnnotations) video.timelineAnnotations = [];
+                
+                // Process timeline segments
+                if (videoData.segments && Array.isArray(videoData.segments)) {
+                    videoData.segments.forEach(segment => {
+                        const annotation = {
+                            id: segment.id || Date.now() + Math.random(),
+                            label: segment.label || 'Unknown',
+                            startTime: parseFloat(segment.start_time || segment.startTime || 0),
+                            endTime: parseFloat(segment.end_time || segment.endTime || 0),
+                            confidence: parseFloat(segment.confidence || 1.0),
+                            color: this.getClassColor(segment.label || 'Unknown')
+                        };
+                        
+                        video.timelineAnnotations.push(annotation);
+                        this.allClasses.add(annotation.label);
+                        this.assignClassColor(annotation.label);
+                        annotationCount++;
+                    });
+                }
+            });
+            
+            if (annotationCount === 0) {
+                throw new Error('No valid video timeline annotations found. Check that filenames match loaded videos.');
+            }
+            
+            return annotationCount;
+        } catch (error) {
+            if (error instanceof SyntaxError) {
+                throw new Error(`Invalid JSON format in Video Timeline file: ${error.message}`);
+            }
+            throw new Error(`Video Timeline parsing error: ${error.message}`);
+        }
+    }
+
     assignClassColor(className) {
         if (!this.classColors[className]) {
             const hue = (Object.keys(this.classColors).length * 137.508) % 360; // Golden angle
@@ -966,9 +1095,13 @@ image1.jpg,car,200,100,120,80</pre>
                 this.openModal(image);
             };
             
-            const annotationCount = image.annotations ? image.annotations.length : 0;
-            const annotationClasses = image.annotations ? 
-                [...new Set(image.annotations.map(ann => ann.label))].slice(0, 3) : [];
+            const isVideo = image.type === 'video';
+            const annotationCount = isVideo ? 
+                (image.timelineAnnotations ? image.timelineAnnotations.length : 0) :
+                (image.annotations ? image.annotations.length : 0);
+            const annotationClasses = isVideo ?
+                (image.timelineAnnotations ? [...new Set(image.timelineAnnotations.map(ann => ann.label))].slice(0, 3) : []) :
+                (image.annotations ? [...new Set(image.annotations.map(ann => ann.label))].slice(0, 3) : []);
             
             // Add selection class if in select mode
             if (this.isSelectMode) {
@@ -980,14 +1113,25 @@ image1.jpg,car,200,100,120,80</pre>
 
             imageItem.innerHTML = `
                 <div class="image-wrapper">
-                    <img src="${image.src}" alt="${image.filename}" loading="lazy">
+                    ${isVideo ? `
+                        <video style="width: 100%; height: 200px; object-fit: cover;" muted>
+                            <source src="${image.src}" type="${image.file.type}">
+                            Your browser does not support the video tag.
+                        </video>
+                        <div class="video-overlay">
+                            <i class="fas fa-play-circle"></i>
+                            <span class="video-duration">${image.duration ? image.duration.toFixed(1) + 's' : ''}</span>
+                        </div>
+                    ` : `
+                        <img src="${image.src}" alt="${image.filename}" loading="lazy">
+                    `}
                     ${this.isSelectMode ? `
                         <input type="checkbox" class="image-checkbox" 
                                ${this.selectedImages.has(image.id) ? 'checked' : ''}
                                onclick="event.stopPropagation();"
                                onchange="samAnalyser.toggleImageSelection('${image.id}', this.checked)">
                     ` : `
-                        <button class="image-remove" onclick="event.stopPropagation(); samAnalyser.removeImage('${image.id}');" title="Remove image">
+                        <button class="image-remove" onclick="event.stopPropagation(); samAnalyser.removeImage('${image.id}');" title="Remove ${isVideo ? 'video' : 'image'}">
                             <i class="fas fa-times"></i>
                         </button>
                     `}
@@ -1272,54 +1416,97 @@ image1.jpg,car,200,100,120,80</pre>
         Plotly.newPlot('embeddingsPlot', data, layout, { displayModeBar: false });
     }
 
-    openModal(image) {
-        this.selectedImage = image;
+    openModal(file) {
+        this.selectedImage = file; // Keep the same variable name for compatibility
         const modal = document.getElementById('imageModal');
         const modalImage = document.getElementById('modalImage');
+        const modalVideo = document.getElementById('modalVideo');
         const modalTitle = document.getElementById('modalTitle');
+        const videoTimeline = document.getElementById('videoTimeline');
         const metadataContent = document.getElementById('metadataContent');
         
         modal.style.display = 'block';
-        modalImage.src = image.src;
-        modalTitle.textContent = image.filename;
+        modalTitle.textContent = file.filename;
+        
+        // Handle video vs image display
+        if (file.type === 'video') {
+            modalImage.style.display = 'none';
+            modalVideo.style.display = 'block';
+            videoTimeline.style.display = 'block';
+            modalVideo.src = file.src;
+            
+            // Setup video timeline annotations
+            this.setupVideoTimeline(file);
+        } else {
+            modalImage.style.display = 'block';
+            modalVideo.style.display = 'none';
+            videoTimeline.style.display = 'none';
+            modalImage.src = file.src;
+        }
         
         // Update metadata
+        const isVideo = file.type === 'video';
         metadataContent.innerHTML = `
             <div class="metadata-item">
                 <div class="metadata-label">Filename</div>
-                <div>${image.filename}</div>
+                <div>${file.filename}</div>
+            </div>
+            <div class="metadata-item">
+                <div class="metadata-label">Type</div>
+                <div>${isVideo ? 'Video' : 'Image'}</div>
             </div>
             <div class="metadata-item">
                 <div class="metadata-label">Dimensions</div>
-                <div>${image.width} × ${image.height} pixels</div>
+                <div>${file.width} × ${file.height} pixels</div>
             </div>
+            ${isVideo ? `
+            <div class="metadata-item">
+                <div class="metadata-label">Duration</div>
+                <div>${file.duration ? file.duration.toFixed(2) + 's' : 'Unknown'}</div>
+            </div>
+            ` : ''}
             <div class="metadata-item">
                 <div class="metadata-label">Format</div>
-                <div>${image.format.toUpperCase()}</div>
+                <div>${file.format.toUpperCase()}</div>
             </div>
             <div class="metadata-item">
                 <div class="metadata-label">File Size</div>
-                <div>${(image.size / (1024 * 1024)).toFixed(2)} MB</div>
+                <div>${(file.size / (1024 * 1024)).toFixed(2)} MB</div>
             </div>
             <div class="metadata-item">
                 <div class="metadata-label">Aspect Ratio</div>
-                <div>${image.aspectRatio.toFixed(2)}</div>
+                <div>${file.aspectRatio.toFixed(2)}</div>
             </div>
             <div class="metadata-item">
                 <div class="metadata-label">Last Modified</div>
-                <div>${image.lastModified.toLocaleDateString()}</div>
+                <div>${file.lastModified.toLocaleDateString()}</div>
             </div>
+            ${!isVideo && file.dominantColor ? `
             <div class="metadata-item">
                 <div class="metadata-label">Dominant Color</div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div style="width: 20px; height: 20px; background-color: rgb(${image.dominantColor.r}, ${image.dominantColor.g}, ${image.dominantColor.b}); border-radius: 3px;"></div>
-                    RGB(${image.dominantColor.r}, ${image.dominantColor.g}, ${image.dominantColor.b})
+                    <div style="width: 20px; height: 20px; background-color: rgb(${file.dominantColor.r}, ${file.dominantColor.g}, ${file.dominantColor.b}); border-radius: 3px;"></div>
+                    RGB(${file.dominantColor.r}, ${file.dominantColor.g}, ${file.dominantColor.b})
                 </div>
+            </div>
+            ` : ''}
+            <div class="metadata-item">
+                <div class="metadata-label">Annotations</div>
+                <div>${isVideo ? 
+                    (file.timelineAnnotations ? file.timelineAnnotations.length : 0) + ' timeline segments' :
+                    (file.annotations ? file.annotations.length : 0) + ' annotations'
+                }</div>
             </div>
         `;
         
         this.setupAnnotationCanvas();
         this.setupModalAnnotationToggle();
+        this.setupModalClassFilter();
+        
+        // Setup video timeline if it's a video
+        if (isVideo) {
+            this.setupVideoTimeline(file);
+        }
     }
 
     setupAnnotationCanvas() {
@@ -1429,7 +1616,16 @@ image1.jpg,car,200,100,120,80</pre>
         
         if (!this.selectedImage || !this.selectedImage.annotations || !this.showAnnotations) return;
         
-        this.selectedImage.annotations.forEach(annotation => {
+        // Get selected class filter from modal dropdown
+        const modalClassFilter = document.getElementById('modalClassFilter');
+        const selectedClass = modalClassFilter ? modalClassFilter.value : '';
+        
+        // Filter annotations based on selected class
+        const filteredAnnotations = selectedClass ? 
+            this.selectedImage.annotations.filter(ann => ann.label === selectedClass) :
+            this.selectedImage.annotations;
+        
+        filteredAnnotations.forEach(annotation => {
             const color = annotation.color || this.getClassColor(annotation.label);
             const [x, y, width, height] = annotation.bbox || [annotation.x, annotation.y, annotation.width, annotation.height];
             
@@ -1932,6 +2128,128 @@ image1.jpg,car,200,100,120,80</pre>
         }
     }
 
+    setupModalClassFilter() {
+        const classFilter = document.getElementById('modalClassFilter');
+        const isVideo = this.selectedImage && this.selectedImage.type === 'video';
+        const hasAnnotations = isVideo ? 
+            (this.selectedImage.timelineAnnotations && this.selectedImage.timelineAnnotations.length > 0) :
+            (this.selectedImage && this.selectedImage.annotations && this.selectedImage.annotations.length > 0);
+        
+        if (hasAnnotations) {
+            classFilter.style.display = 'inline-block';
+            
+            // Get unique classes from current annotations
+            const classes = isVideo ? 
+                [...new Set(this.selectedImage.timelineAnnotations.map(ann => ann.label))] :
+                [...new Set(this.selectedImage.annotations.map(ann => ann.label))];
+            
+            // Clear and populate dropdown
+            classFilter.innerHTML = '<option value="">All Classes</option>';
+            classes.sort().forEach(className => {
+                const option = document.createElement('option');
+                option.value = className;
+                option.textContent = className;
+                classFilter.appendChild(option);
+            });
+            
+            // Remove existing listeners and add new one
+            classFilter.replaceWith(classFilter.cloneNode(true));
+            document.getElementById('modalClassFilter').addEventListener('change', () => {
+                if (isVideo) {
+                    this.updateVideoTimeline();
+                } else {
+                    this.drawAnnotations();
+                }
+            });
+        } else {
+            classFilter.style.display = 'none';
+        }
+    }
+
+    setupVideoTimeline(videoFile) {
+        const timelineContainer = document.getElementById('timelineAnnotations');
+        const modalVideo = document.getElementById('modalVideo');
+        
+        if (!videoFile.timelineAnnotations || videoFile.timelineAnnotations.length === 0) {
+            timelineContainer.innerHTML = '<div style="text-align: center; padding: 10px; color: #888;">No timeline annotations</div>';
+            return;
+        }
+        
+        // Clear existing timeline
+        timelineContainer.innerHTML = '';
+        
+        // Create timeline segments
+        this.renderVideoTimeline(videoFile.timelineAnnotations, videoFile.duration || 30);
+        
+        // Add click events to timeline segments
+        this.setupTimelineEvents(modalVideo);
+    }
+
+    renderVideoTimeline(annotations, duration) {
+        const timelineContainer = document.getElementById('timelineAnnotations');
+        const classFilter = document.getElementById('modalClassFilter');
+        const selectedClass = classFilter ? classFilter.value : '';
+        
+        // Filter annotations if a class is selected
+        const filteredAnnotations = selectedClass ? 
+            annotations.filter(ann => ann.label === selectedClass) : annotations;
+        
+        filteredAnnotations.forEach((annotation, index) => {
+            const segment = document.createElement('div');
+            segment.className = 'timeline-segment';
+            segment.dataset.startTime = annotation.startTime;
+            segment.dataset.endTime = annotation.endTime;
+            segment.dataset.label = annotation.label;
+            
+            // Calculate position and width as percentages
+            const leftPercent = (annotation.startTime / duration) * 100;
+            const widthPercent = ((annotation.endTime - annotation.startTime) / duration) * 100;
+            
+            segment.style.left = `${leftPercent}%`;
+            segment.style.width = `${widthPercent}%`;
+            segment.style.backgroundColor = annotation.color;
+            segment.textContent = annotation.label;
+            
+            // Add click handler to seek video
+            segment.addEventListener('click', () => {
+                const modalVideo = document.getElementById('modalVideo');
+                modalVideo.currentTime = annotation.startTime;
+                modalVideo.play();
+                
+                // Highlight active segment
+                document.querySelectorAll('.timeline-segment').forEach(seg => seg.classList.remove('active'));
+                segment.classList.add('active');
+            });
+            
+            timelineContainer.appendChild(segment);
+        });
+    }
+
+    updateVideoTimeline() {
+        if (this.selectedImage && this.selectedImage.type === 'video') {
+            this.renderVideoTimeline(this.selectedImage.timelineAnnotations, this.selectedImage.duration || 30);
+        }
+    }
+
+    setupTimelineEvents(video) {
+        // Update active timeline segment based on current video time
+        video.addEventListener('timeupdate', () => {
+            const currentTime = video.currentTime;
+            const segments = document.querySelectorAll('.timeline-segment');
+            
+            segments.forEach(segment => {
+                const startTime = parseFloat(segment.dataset.startTime);
+                const endTime = parseFloat(segment.dataset.endTime);
+                
+                if (currentTime >= startTime && currentTime <= endTime) {
+                    segment.classList.add('active');
+                } else {
+                    segment.classList.remove('active');
+                }
+            });
+        });
+    }
+
     // Method to detect existing annotations in images
     detectExistingAnnotations(imageData) {
         // Check filename patterns that might indicate annotated images
@@ -1958,6 +2276,65 @@ image1.jpg,car,200,100,120,80</pre>
         if (imageData.file.name.includes('annotated') || imageData.file.name.includes('labeled')) {
             this.addDemoAnnotations(imageData);
         }
+    }
+
+    detectExistingVideoAnnotations(videoData) {
+        // Check filename patterns that might indicate annotated videos
+        const filename = videoData.filename.toLowerCase();
+        
+        // Common patterns for annotated videos
+        const annotationPatterns = [
+            '_annotated', '_labeled', '_tracked', '_segments', '_timeline',
+            '_events', '_actions', '_temporal'
+        ];
+        
+        const hasAnnotationPattern = annotationPatterns.some(pattern => 
+            filename.includes(pattern)
+        );
+        
+        // If pattern suggests annotations, add some demo timeline annotations
+        if (hasAnnotationPattern) {
+            this.addDemoVideoAnnotations(videoData);
+        }
+    }
+
+    addDemoVideoAnnotations(videoData) {
+        // Add some demo timeline annotations to show the capability
+        const duration = videoData.duration || 30; // Default 30 seconds if duration not available
+        const demoAnnotations = [
+            {
+                id: 'video_demo_1',
+                label: 'Action',
+                startTime: duration * 0.1,
+                endTime: duration * 0.3,
+                confidence: 0.95,
+                color: this.getClassColor('Action')
+            },
+            {
+                id: 'video_demo_2', 
+                label: 'Event',
+                startTime: duration * 0.5,
+                endTime: duration * 0.7,
+                confidence: 0.88,
+                color: this.getClassColor('Event')
+            },
+            {
+                id: 'video_demo_3',
+                label: 'Scene Change',
+                startTime: duration * 0.8,
+                endTime: duration * 0.9,
+                confidence: 0.92,
+                color: this.getClassColor('Scene Change')
+            }
+        ];
+        
+        videoData.timelineAnnotations = demoAnnotations;
+        
+        // Add classes to global class list
+        demoAnnotations.forEach(ann => {
+            this.allClasses.add(ann.label);
+            this.assignClassColor(ann.label);
+        });
     }
 
     addDemoAnnotations(imageData) {
